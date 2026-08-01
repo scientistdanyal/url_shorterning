@@ -5,6 +5,7 @@ import { query } from "./db.js";
 import { generateShortCode } from "./utils/shortCode.js";
 import redis from "./redis.js";
 import { enqueueClick } from "./queues/clickQueue.js";
+import { shortenLimiter } from "./middleware/rateLimit.js";
 
 dotenv.config();
 
@@ -85,7 +86,7 @@ app.get("/:shortCode", async(req, res) => {
 
 
 
-app.post("/api/shorten", async(req, res) => {
+app.post("/api/shorten", shortenLimiter, async(req, res) => {
     try { 
         const { long_url, user_id } = req.body; // long_url required; user_id is optional 
 
