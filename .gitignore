@@ -1,0 +1,39 @@
+# dependencies — never commit installed packages
+node_modules/
+
+# secrets — never commit real env values
+.env
+.env.local
+.env.*.local
+
+# logs
+*.log
+npm-debug.log*
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# build output (frontend Vite / React)
+dist/
+build/
+
+# editor / IDE
+.vscode/
+.idea/
+
+# coverage / test junk
+coverage/
+
+# misc
+*.zip
+*.tar
+*.gz
+*.bz2
+*.rar
+*.7z
+*.pdf
+*.docx
+*.doc
+*.xls
+*.xlsx
