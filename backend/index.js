@@ -11,6 +11,7 @@ dotenv.config();
 
 const TTL_SECONDS = 60;
 const app = express();
+app.set("trust proxy", 1); // behind Nginx: use X-Forwarded-For so rate limit is per real client IP
 const PORT = process.env.PORT || 3000;
 
 async function purgeExpiredUrls() {
