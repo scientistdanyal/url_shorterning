@@ -9,9 +9,17 @@ import { shortenLimiter } from "./middleware/rateLimit.js";
 
 dotenv.config();
 
-
+const TTL_SECONDS = 60;
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+async function purgeExpiredUrls() {
+    try {
+        await query(`DELETE FROM urls WHERE created_at < NOW() - INTERVAL '1 minute'`);
+    } catch (error) {
+        console.error("Error purging expired URLs:", error.message);
+    }
+}
 
 app.use(cors());
 app.use(express.json());
@@ -49,23 +57,29 @@ app.get("/:shortCode", async(req, res) => {
 
         const cacheKey = `url:${shortCode}`; // redis key for this short code
 
-
-        // try redis first
         let long_url = await redis.get(cacheKey);
-        // if cache miss -> db
+
         if (!long_url) {
             const result = await query(
-                `SELECT long_url from urls WHERE short_code = $1`,
+                `SELECT long_url, created_at FROM urls WHERE short_code = $1`,
                 [shortCode]
             );
 
             if (result.rows.length == 0) {
-                return res.status(404).json({error: "Short URL not found"});
+                return res.status(404).json({error: "Short URL not found or expired"});
+            }
+
+            const { created_at } = result.rows[0];
+            const remainingSeconds = TTL_SECONDS - Math.floor((Date.now() - new Date(created_at).getTime()) / 1000);
+
+            if (remainingSeconds <= 0) {
+                await query(`DELETE FROM urls WHERE short_code = $1`, [shortCode]);
+                return res.status(410).json({error: "Short URL has expired"});
             }
 
             long_url = result.rows[0].long_url;
-            await redis.set(cacheKey, long_url, {EX: 60 * 60 * 24}); // cache for 1 hour
-        };
+            await redis.set(cacheKey, long_url, { EX: remainingSeconds });
+        }
 
         enqueueClick({
             short_code: shortCode,
@@ -108,9 +122,10 @@ app.post("/api/shorten", shortenLimiter, async(req, res) => {
             [user_id || null,  short_code, long_url]
         );
 
-
         const row = result.rows[0];
+        const expires_at = new Date(new Date(row.created_at).getTime() + TTL_SECONDS * 1000).toISOString();
 
+        await redis.set(`url:${short_code}`, long_url, { EX: TTL_SECONDS });
 
         res.status(201).json({
             id: row.id,
@@ -118,16 +133,18 @@ app.post("/api/shorten", shortenLimiter, async(req, res) => {
             short_code: row.short_code,
             long_url: row.long_url,
             created_at: row.created_at,
+            expires_at,
+            expires_in_seconds: TTL_SECONDS,
             short_url: `${process.env.BASE_URL}/${short_code}`,
-        })
-        if (result.rows.length === 0) {
-            return res.status(500).json({error: "Failed to shorten URL"});
-        }
-
-        const short_url = `${process.env.BASE_URL}/${short_code}`;
-        res.json({short_url});
-    } catch (error) {}
+        });
+    } catch (error) {
+        console.error("Error shortening URL:", error.message);
+        res.status(500).json({error: "Internal server error"});
+    }
 })
+
+purgeExpiredUrls();
+setInterval(purgeExpiredUrls, 15_000);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

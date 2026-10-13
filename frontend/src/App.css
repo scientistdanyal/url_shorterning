@@ -166,8 +166,30 @@
   transition: background 0.15s ease;
 }
 
-.copy-btn:hover {
+.copy-btn:hover:not(:disabled) {
   background: #f3faf8;
+}
+
+.copy-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ttl {
+  margin: 0.45rem 0 0;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.ttl.expired {
+  color: var(--danger);
+}
+
+.expired-url {
+  color: var(--ink-soft);
+  font-weight: 600;
+  word-break: break-all;
+  text-decoration: line-through;
 }
 
 @media (max-width: 560px) {
